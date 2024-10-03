@@ -1,11 +1,11 @@
 import React, { useEffect, useState } from 'react';
-import EmployeeProfiles from './EmployeeProfiles';
-import AddEmployeeForm from './AddEmployeeForm';
-import TaskFilter from './TaskFilter';
-import TaskForm from './TaskForm';
-import TaskList from './TaskList';
-import ExcelUpload from './ExcelUpload';
-import ConfirmationDialog from './ConfirmationDialog';
+const EmployeeProfiles = React.lazy(() => import('./EmployeeProfiles'));
+const AddEmployeeForm = React.lazy(() => import('./AddEmployeeForm'));
+const TaskFilter = React.lazy(() => import('./TaskFilter'));
+const TaskForm = React.lazy(() => import('./TaskForm'));
+const TaskList = React.lazy(() => import('./TaskList'));
+const ExcelUpload = React.lazy(() => import('./ExcelUpload'));
+const ConfirmationDialog = React.lazy(() => import('./ConfirmationDialog'));
 import { db } from '../firebaseConfig';
 import { collection, getDocs, addDoc, deleteDoc, updateDoc, doc } from 'firebase/firestore';
 
@@ -13,24 +13,21 @@ const TaskManager = () => {
   const [tasks, setTasks] = useState([]);
   const [employees, setEmployees] = useState([]);
   const [filter, setFilter] = useState('All');
-  const [sortBy, setSortBy] = useState('priority'); // Default sorting by priority
+  const [sortBy, setSortBy] = useState('priority');
   const [confirmationDialog, setConfirmationDialog] = useState(false);
   const [taskToDelete, setTaskToDelete] = useState(null);
   const [taskToEdit, setTaskToEdit] = useState(null);
   const [isDarkMode, setIsDarkMode] = useState(false);
-  const [showEmployeeForm, setShowEmployeeForm] = useState(false); // State for showing the form
+  const [showEmployeeForm, setShowEmployeeForm] = useState(false);
 
   const handleEmployeeAdded = () => {
-    // Reload the employee data after adding a new employee
-    // This is where you'd fetch the updated employee data from Firestore
+    fetchEmployees(); // Reload employee data after adding
   };
 
-  // Toggle dark mode
   const toggleDarkMode = () => {
     setIsDarkMode(prevMode => !prevMode);
   };
 
-  // Save the mode in localStorage
   useEffect(() => {
     const savedMode = localStorage.getItem('darkMode');
     if (savedMode === 'true') {
@@ -46,7 +43,7 @@ const TaskManager = () => {
   useEffect(() => {
     fetchTasks();
     fetchEmployees();
-  }, [filter, sortBy]); // Fetch tasks when filtering or sorting changes
+  }, [filter, sortBy]);
 
   const fetchTasks = async () => {
     const querySnapshot = await getDocs(collection(db, 'tasks'));
@@ -55,15 +52,13 @@ const TaskManager = () => {
       ...doc.data(),
     }));
 
-    // Filter tasks based on the selected filter
-    const filteredTasks = fetchedTasks.filter(task => 
+    const filteredTasks = fetchedTasks.filter(task =>
       filter === 'All' ? true : task.status === filter
     );
 
-    // Sort tasks based on priority
     const sortedTasks = filteredTasks.sort((a, b) => {
       const priorities = { 'High': 3, 'Medium': 2, 'Low': 1 };
-      return priorities[b.priority] - priorities[a.priority]; // Sort by priority
+      return priorities[b.priority] - priorities[a.priority];
     });
 
     setTasks(sortedTasks);
@@ -81,7 +76,7 @@ const TaskManager = () => {
         const taskDoc = doc(db, 'tasks', taskToEdit.id);
         await updateDoc(taskDoc, task);
         setTasks(tasks.map(t => (t.id === taskToEdit.id ? { ...task, id: t.id } : t)));
-        setTaskToEdit(null);  // Reset the editing state
+        setTaskToEdit(null);
       } catch (error) {
         console.error('Error updating task:', error);
       }
@@ -95,26 +90,20 @@ const TaskManager = () => {
     }
   };
 
-  // Add tasks from Excel upload
+  // Handle adding tasks from Excel upload
   const handleExcelDataSubmit = async (uploadedData) => {
     try {
-      for (const row of uploadedData) {
-        if (row['Task Name'] && row['Priority'] && row['Assigned To']) {
-          const taskObject = {
-            taskName: row['Task Name'],
-            priority: row['Priority'],
-            assignedTo: row['Assigned To'],
-            notes: row['Notes'] || '',
-            status: 'Pending'
-          };
-          const docRef = await addDoc(collection(db, 'tasks'), taskObject);
-          setTasks((prevTasks) => [...prevTasks, { id: docRef.id, ...taskObject }]);
+      for (const task of uploadedData) {
+        if (task.taskName && task.priority && task.assignedTo) {
+          const docRef = await addDoc(collection(db, 'tasks'), task);
+          setTasks((prevTasks) => [...prevTasks, { id: docRef.id, ...task }]);
         }
       }
     } catch (error) {
       console.error('Error adding tasks from Excel:', error);
     }
   };
+
 
   // Complete a task
   const completeTask = async (taskId) => {
@@ -160,51 +149,32 @@ const TaskManager = () => {
     setTaskToEdit(task);  // Set the task being edited
   };
 
+  
   return (
     <div className={`container mx-auto mt-10 px-4 sm:px-6 md:px-8 lg:px-10 ${isDarkMode ? 'bg-gray-800 text-white' : 'bg-zinc-300 text-black'}`}>
       <h1 className="text-3xl font-bold mb-6 text-center">Task Manager</h1>
-      <button
-        onClick={toggleDarkMode}
-        className={`px-4 py-2 rounded ${isDarkMode ? 'bg-gray-700' : 'bg-gray-200'} transition-colors mb-4`}
-      >
-        {isDarkMode ? 'Light' : 'Dark '}
+      <button onClick={toggleDarkMode} className={`px-4 py-2 rounded ${isDarkMode ? 'bg-gray-700' : 'bg-gray-200'} transition-colors mb-4`}>
+        {isDarkMode ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
       </button>
 
+      <Suspense fallback={<div>Loading...</div>}>
+        <TaskForm addOrUpdateTask={addOrUpdateTask} employees={employees} taskToEdit={taskToEdit} />
+        <TaskFilter filter={filter} setFilter={setFilter} sortBy={sortBy} setSortBy={setSortBy} />
+        <TaskList tasks={tasks} filter={filter} completeTask={completeTask} onDelete={confirmDeleteTask} editTask={handleEditTask} markPending={markPending} />
+        <EmployeeProfiles employees={employees} />
+        
+        <button onClick={() => setShowEmployeeForm(!showEmployeeForm)} className="bg-blue-500 text-white px-4 py-2 rounded mb-4">
+          {showEmployeeForm ? 'Hide Add Employee Form' : 'Show Add Employee Form'}
+        </button>
 
+        {showEmployeeForm && <AddEmployeeForm onEmployeeAdded={handleEmployeeAdded} />}
+        <ExcelUpload handleExcelDataSubmit={handleExcelDataSubmit} />
 
-      {showEmployeeForm && (
-        <AddEmployeeForm onEmployeeAdded={handleEmployeeAdded} />
-      )}
-      <TaskForm
-        addOrUpdateTask={addOrUpdateTask}
-        employees={employees}
-        taskToEdit={taskToEdit}  // Pass the task being edited
-      />
-      <TaskFilter filter={filter} setFilter={setFilter} sortBy={sortBy} setSortBy={setSortBy} />
-      <TaskList
-        tasks={tasks}
-        filter={filter}
-        completeTask={completeTask}
-        onDelete={confirmDeleteTask}
-        editTask={handleEditTask}
-        markPending={markPending}  // Pass markPending function to TaskList
-      />
-      <EmployeeProfiles employees={employees} />
-      
-      <button
-        onClick={() => setShowEmployeeForm(!showEmployeeForm)}
-        className="bg-blue-500 text-white px-4 py-2 rounded mb-4"
-      >
-        {showEmployeeForm ? 'Hide Add Employee Form' : 'Show Add Employee Form'}
-      </button>
-      <ExcelUpload handleExcelDataSubmit={handleExcelDataSubmit} />
-      <ConfirmationDialog
-        isOpen={confirmationDialog}  // Control visibility of the dialog
-        onConfirm={deleteTask}  // Confirm deletion
-        onCancel={() => setConfirmationDialog(false)}  // Cancel deletion
-      />
+        <ConfirmationDialog isOpen={confirmationDialog} onConfirm={deleteTask} onCancel={() => setConfirmationDialog(false)} />
+      </Suspense>
     </div>
   );
 };
 
 export default TaskManager;
+
