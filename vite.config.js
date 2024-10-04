@@ -1,9 +1,10 @@
 import { defineConfig } from 'vite';
 
 export default defineConfig({
+  root: 'public', // Specify the correct root directory
   build: {
+    outDir: '../dist', // Output build files to the correct location
     rollupOptions: {
-      // Check your chunk splitting here, and adjust if needed
       output: {
         manualChunks(id) {
           if (id.includes('node_modules')) {
